@@ -9,6 +9,13 @@ android {
     compileSdk = flutter.compileSdkVersion
     // Required by flutter_overlay_window and the Android plugins it depends on.
     ndkVersion = "27.0.12077973"
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
     defaultConfig {
         applicationId = "com.semakqr.semak_qr"
         minSdk = 24
