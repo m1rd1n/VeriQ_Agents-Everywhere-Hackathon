@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'config.dart';
 
 const _screenshotEvents = EventChannel('com.semakqr/screenshot_events');
+const _screenshotReader = MethodChannel('com.semakqr/screenshot_reader');
 
 void main() => runApp(const SemakQrApp());
 
@@ -45,10 +46,8 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refreshOverlayPermission();
-    _screenshots = _screenshotEvents.receiveBroadcastStream().listen((_) {
-      // The event contains no saved image path. The user chooses a screenshot
-      // only when Android blocks automatic access to it.
-      FlutterOverlayWindow.shareData('screenshot_detected');
+    _screenshots = _screenshotEvents.receiveBroadcastStream().listen((event) {
+      if (event is String) _checkDetectedScreenshot(event);
     });
     _overlayMessages = FlutterOverlayWindow.overlayListener.listen((event) {
       if (event == 'request_app_upload') _uploadScreenshot(showInOverlay: true);
@@ -154,6 +153,40 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  /// Handles an Android-native screenshot notification. The bytes are read
+  /// directly from MediaStore into request memory and are never saved/copied.
+  Future<void> _checkDetectedScreenshot(String contentUri) async {
+    if (_uploading) return;
+    _uploading = true;
+    await FlutterOverlayWindow.shareData('screenshot_started');
+    try {
+      final bytes = await _screenshotReader.invokeMethod<Uint8List>(
+        'readScreenshot',
+        {'uri': contentUri},
+      );
+      if (bytes == null || bytes.isEmpty) throw const _CheckException('Unreadable screenshot');
+      final result = await TransactionChecker.checkBytes(bytes);
+      if (mounted) setState(() => _lastResult = result);
+      await FlutterOverlayWindow.shareData(jsonEncode({
+        'type': 'check_result',
+        ...result.toJson(),
+      }));
+    } catch (_) {
+      const result = CheckResult(
+        riskLevel: 'unknown',
+        reason: "Couldn't check right now — proceed carefully",
+        evidence: [],
+      );
+      if (mounted) setState(() => _lastResult = result);
+      await FlutterOverlayWindow.shareData(jsonEncode({
+        'type': 'check_result',
+        ...result.toJson(),
+      }));
+    } finally {
+      _uploading = false;
     }
   }
 
@@ -342,6 +375,15 @@ class _OverlayViewState extends State<OverlayView>
     _overlayEvents = FlutterOverlayWindow.overlayListener.listen((event) {
       if (event == 'screenshot_detected') {
         _expand('Screenshot detected - upload it to check');
+      } else if (event == 'screenshot_started') {
+        _expand();
+        if (mounted) {
+          setState(() {
+            _loading = true;
+            _result = null;
+            _step = 'Checking new screenshot...';
+          });
+        }
       } else if (event == 'upload_started') {
         _expand();
         if (mounted) {
@@ -619,6 +661,20 @@ class CheckResult {
 
 class TransactionChecker {
   static Future<CheckResult> check(XFile image) async {
+    return _send(() => http.MultipartFile.fromPath('screenshot', image.path));
+  }
+
+  static Future<CheckResult> checkBytes(Uint8List bytes) async {
+    return _send(() async => http.MultipartFile.fromBytes(
+          'screenshot',
+          bytes,
+          filename: 'payment-screenshot.png',
+        ));
+  }
+
+  static Future<CheckResult> _send(
+    Future<http.MultipartFile> Function() makeImage,
+  ) async {
     if (backendBaseUrl.isEmpty) {
       throw const _CheckException('Backend URL has not been configured.');
     }
@@ -629,9 +685,7 @@ class TransactionChecker {
           'POST',
           Uri.parse('$backendBaseUrl/check-transaction'),
         );
-        request.files.add(
-          await http.MultipartFile.fromPath('screenshot', image.path),
-        );
+        request.files.add(await makeImage());
         final streamed = await request.send().timeout(
           const Duration(seconds: 10),
         );
