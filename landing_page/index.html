@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Semak QR — Know who you're paying, before you pay them.</title>
+<meta name="description" content="Semak QR checks the bank account behind a DuitNow QR payment against known scam reports — right on your screen, before the money moves.">
+<meta name="theme-color" content="#101317">
+
+<!-- Two families only: Instrument Serif (display) + Inter (body) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ---------------------------------------------------------------
+   Palette. Ink base (never pure black), warm ember for flagged
+   states, jade for safe/verified — the jade echoes the #006E5B
+   bubble in the Android app so page and product read as one thing.
+---------------------------------------------------------------- */
+:root{
+  --ink:#101317;
+  --ink-2:#161A20;
+  --line:rgba(255,255,255,.085);
+  --line-2:rgba(255,255,255,.16);
+  --text:#ECEAE5;
+  --muted:#8F98A4;
+  --ember:#FF6B45;
+  --ember-soft:#FFA98F;
+  --ember-dim:rgba(255,107,69,.13);
+  --jade:#2FBF9B;
+  --jade-soft:#8FE3CF;
+  --jade-dim:rgba(47,191,155,.13);
+  --display:"Instrument Serif",Georgia,"Times New Roman",serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--ink);
+  color:var(--text);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img,svg{max-width:100%;display:block}
+a{color:inherit}
+
+.wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 24px}
+@media (max-width:520px){.wrap{padding:0 20px}}
+
+.serif{font-family:var(--display);font-weight:400;letter-spacing:-.01em;line-height:1.05}
+
+/* ------------------------------ nav ------------------------------ */
+.nav{
+  position:sticky;top:0;z-index:50;
+  background:rgba(16,19,23,.78);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:66px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand-mark{width:22px;height:22px;flex:none}
+.brand-mark rect{fill:var(--jade)}
+.brand-name{font-family:var(--display);font-size:23px;letter-spacing:-.01em}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{
+  text-decoration:none;color:var(--muted);font-size:14.5px;
+  padding:4px 0;border-bottom:1px solid transparent;transition:color .18s,border-color .18s;
+}
+.nav-links a:hover{color:var(--text);border-color:var(--line-2)}
+@media (max-width:440px){.nav-links{gap:18px}.nav-links a{font-size:13.5px}}
+
+/* ------------------------------ hero ------------------------------ */
+.hero{position:relative;padding:clamp(44px,7vw,92px) 0 clamp(56px,8vw,104px)}
+.hero::before{
+  /* one quiet ember bloom behind the phone; nothing else on the page glows */
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(46% 42% at 76% 34%,rgba(255,107,69,.10),transparent 70%);
+}
+.hero-grid{
+  position:relative;display:grid;gap:clamp(44px,6vw,72px);
+  grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);align-items:center;
+}
+@media (max-width:900px){.hero-grid{grid-template-columns:1fr;justify-items:center;text-align:center}}
+
+h1{margin:0;font-size:clamp(40px,6.6vw,74px)}
+h1 em{font-style:italic;color:var(--ember-soft)}
+.subhead{
+  margin:22px 0 0;max-width:46ch;color:var(--muted);
+  font-size:clamp(15.5px,1.5vw,17.5px);line-height:1.65;
+}
+@media (max-width:900px){.subhead{margin-inline:auto}}
+
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+@media (max-width:900px){.cta{justify-content:center}}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:13px 22px;border-radius:2px;text-decoration:none;
+  font-size:15px;font-weight:500;
+  border:1px solid transparent;transition:background .18s,border-color .18s,color .18s,transform .18s;
+}
+.btn-primary{background:var(--text);color:#101317}
+.btn-primary:hover{background:#fff;transform:translateY(-1px)}
+.btn-ghost{border-color:var(--line-2);color:var(--text)}
+.btn-ghost:hover{border-color:var(--text);background:rgba(255,255,255,.04)}
+
+.hero-note{
+  margin:26px 0 0;font-size:13.5px;color:#6E7683;max-width:44ch;line-height:1.55;
+}
+@media (max-width:900px){.hero-note{margin-inline:auto}}
+.hero-note b{color:var(--muted);font-weight:500}
+
+/* --------------------------- phone mockup --------------------------- */
+.stage{display:flex;justify-content:center;width:100%}
+.phone{
+  --w:min(300px,74vw);
+  position:relative;width:var(--w);aspect-ratio:300/616;
+  text-align:left;                        /* don't inherit the hero's centering on mobile */
+  font-size:calc(var(--w)/23);            /* everything inside scales in em */
+  border-radius:2.6em;padding:.62em;
+  background:linear-gradient(160deg,#2B333D,#12161B 42%,#0C0F13);
+  box-shadow:0 2px 0 rgba(255,255,255,.09) inset,0 40px 80px -28px rgba(0,0,0,.9);
+}
+.screen{
+  position:relative;width:100%;height:100%;overflow:hidden;
+  border-radius:2.1em;background:#0B0E12;perspective:900px;
+}
+.notch{
+  position:absolute;top:.62em;left:50%;transform:translateX(-50%);
+  width:6.2em;height:1.5em;border-radius:1em;background:#0A0D11;z-index:6;
+}
+
+/* two faces: the QR scanner, then the bank's confirmation screen */
+.flipper{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .82s cubic-bezier(.7,.02,.24,1)}
+.is-confirm .flipper{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden}
+.face-back{transform:rotateY(180deg)}
+
+/* --- scanner face --- */
+.face-scan{
+  background:radial-gradient(120% 90% at 50% 0%,#151B22,#0B0E12 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5em;padding:2.6em 1.6em;
+}
+.scan-label{font-size:.86em;color:#79828F;margin:0}
+.scan-box{position:relative;width:11.4em;height:11.4em;display:grid;place-items:center}
+.qr{
+  display:grid;grid-template-columns:repeat(21,1fr);width:9.2em;height:9.2em;
+  background:#ECEAE5;padding:.34em;border-radius:.2em;
+}
+.qr i{background:transparent}
+.qr i.on{background:#0B0E12}
+.corner{position:absolute;width:1.7em;height:1.7em;border:.16em solid var(--jade);opacity:.9}
+.corner.tl{top:0;left:0;border-right:0;border-bottom:0}
+.corner.tr{top:0;right:0;border-left:0;border-bottom:0}
+.corner.bl{bottom:0;left:0;border-right:0;border-top:0}
+.corner.br{bottom:0;right:0;border-left:0;border-top:0}
+.scanline{
+  position:absolute;left:.2em;right:.2em;height:.16em;top:0;
+  background:linear-gradient(90deg,transparent,var(--jade),transparent);
+  box-shadow:0 0 1.2em rgba(47,191,155,.75);opacity:0;
+}
+.is-scanning .scanline{animation:sweep 1.55s cubic-bezier(.45,0,.55,1) 1 forwards}
+@keyframes sweep{
+  0%{transform:translateY(.2em);opacity:0}
+  12%{opacity:1}
+  88%{opacity:1}
+  100%{transform:translateY(10.9em);opacity:0}
+}
+.scan-sub{font-size:.78em;color:#5C6572;margin:0}
+
+/* --- bank confirmation face --- */
+.face-bank{background:#F4F3F0;color:#15181C;display:flex;flex-direction:column}
+.bank-top{
+  background:#006E5B;color:#EAF6F2;padding:2.6em 1.15em .95em;
+  font-size:.82em;display:flex;align-items:center;justify-content:space-between;
+}
+.bank-top b{font-weight:600}
+.bank-body{padding:1.15em;display:flex;flex-direction:column;gap:.6em;flex:1}
+.bank-head{font-size:.82em;color:#6B7480;margin:0}
+.bank-amt{font-family:var(--display);font-size:2.5em;line-height:1;letter-spacing:-.02em}
+.bank-rows{margin-top:.35em;border-top:1px solid #E1DFDA}
+.brow{display:flex;justify-content:space-between;gap:.8em;padding:.62em 0;border-bottom:1px solid #E1DFDA;font-size:.78em}
+.brow span{color:#7A828D;flex:none}
+.brow b{font-weight:500;text-align:right}
+.bank-pay{
+  margin-top:auto;background:#006E5B;color:#fff;text-align:center;
+  padding:.85em;border-radius:.25em;font-size:.85em;font-weight:500;
+}
+
+/* --- the floating bubble --- */
+.bubble{
+  position:absolute;right:1em;top:40%;z-index:8;
+  width:3.5em;height:3.5em;border-radius:50%;
+  background:#006E5B;color:#EAF6F2;
+  display:grid;place-items:center;
+  box-shadow:0 .5em 1.4em rgba(0,0,0,.5);
+  opacity:0;transform:translateX(2.4em) scale(.86);
+  transition:opacity .34s ease,transform .34s cubic-bezier(.34,1.4,.5,1);
+}
+.bubble svg{width:1.7em;height:1.7em}
+.is-bubble .bubble{opacity:1;transform:translateX(0) scale(1)}
+.is-bubble .bubble::after{
+  content:"";position:absolute;inset:-.28em;border-radius:50%;
+  border:.12em solid rgba(47,191,155,.75);animation:ping 1.5s ease-out infinite;
+}
+@keyframes ping{0%{transform:scale(.85);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+.is-tapped .bubble{transform:scale(.82);opacity:.55;transition-duration:.16s}
+.is-sheet .bubble,.is-verdict .bubble{opacity:0;transform:translateX(2.4em) scale(.8)}
+
+/* --- checking / verdict sheet --- */
+.sheet{
+  position:absolute;left:.55em;right:.55em;bottom:.55em;z-index:9;
+  background:var(--ink-2);border:1px solid var(--line);border-radius:1em;
+  padding:1.05em 1.05em 1.15em;
+  box-shadow:0 -1em 2.6em rgba(0,0,0,.55);
+  opacity:0;transform:translateY(1.6em);
+  transition:opacity .34s ease,transform .42s cubic-bezier(.2,.9,.25,1);
+}
+.is-sheet .sheet,.is-verdict .sheet{opacity:1;transform:translateY(0)}
+.sheet-tag{display:flex;align-items:center;gap:.5em;font-size:.72em;color:var(--muted)}
+.dot{width:.5em;height:.5em;border-radius:50%;background:var(--muted);flex:none}
+.is-sheet .dot{background:var(--jade);animation:blink 1s steps(2,end) infinite}
+@keyframes blink{50%{opacity:.25}}
+
+.checks{list-style:none;margin:.85em 0 0;padding:0;display:flex;flex-direction:column;gap:.55em}
+.checks li{
+  display:flex;align-items:center;gap:.55em;font-size:.78em;color:#5F6875;
+  opacity:.4;transition:opacity .3s,color .3s;
+}
+.checks li.done{opacity:1;color:var(--muted)}
+.tick{
+  width:1.05em;height:1.05em;border-radius:50%;flex:none;
+  border:1px solid var(--line-2);display:grid;place-items:center;
+  transition:background .25s,border-color .25s;
+}
+.tick svg{width:.62em;height:.62em;opacity:0;stroke:var(--jade);transition:opacity .2s}
+.checks li.done .tick{background:var(--jade-dim);border-color:rgba(47,191,155,.55)}
+.checks li.done .tick svg{opacity:1}
+
+/* only one of checks / verdict is ever in the DOM flow — no overlap */
+.verdict{display:none}
+.is-verdict .checks{display:none}
+.is-verdict .verdict{display:block;animation:rise .4s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(.5em)}to{opacity:1;transform:none}}
+.v-head{display:flex;align-items:center;gap:.55em;margin-top:.8em}
+.v-badge{width:1.9em;height:1.9em;border-radius:50%;flex:none;display:grid;place-items:center}
+.v-badge svg{width:1.05em;height:1.05em}
+.v-title{font-family:var(--display);font-size:1.32em;line-height:1.1}
+.v-body{margin:.65em 0 0;font-size:.78em;line-height:1.5;color:var(--muted)}
+.v-evidence{
+  margin:.8em 0 0;padding:.6em .7em;border-radius:.3em;
+  font-size:.7em;line-height:1.45;color:var(--muted);
+  border-left:2px solid var(--line-2);background:rgba(255,255,255,.028);
+}
+.v-flagged .v-badge{background:var(--ember-dim);color:var(--ember)}
+.v-flagged .v-title{color:var(--ember-soft)}
+.v-flagged .v-evidence{border-left-color:var(--ember)}
+.v-flagged .sheet-strip{background:var(--ember)}
+.v-safe .v-badge{background:var(--jade-dim);color:var(--jade)}
+.v-safe .v-title{color:var(--jade-soft)}
+.v-safe .v-evidence{border-left-color:var(--jade)}
+.v-safe .sheet-strip{background:var(--jade)}
+.sheet-strip{
+  position:absolute;left:1.05em;right:1.05em;top:0;height:2px;border-radius:2px;
+  background:var(--line-2);opacity:0;transition:opacity .3s;
+}
+.is-verdict .sheet-strip{opacity:1}
+
+.stage-caption{
+  margin:20px auto 0;max-width:32ch;text-align:center;
+  font-size:12.5px;color:#5F6874;line-height:1.5;
+}
+
+/* --------------------------- how it works --------------------------- */
+.section{padding:clamp(60px,9vw,120px) 0;border-top:1px solid var(--line)}
+.sec-head{max-width:38ch}
+.sec-head h2{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(30px,4.4vw,46px);line-height:1.1}
+.sec-head p{margin:16px 0 0;color:var(--muted);font-size:16px;line-height:1.65}
+
+.steps{margin-top:clamp(38px,5vw,64px);display:grid;gap:0}
+.step{
+  display:grid;grid-template-columns:64px minmax(0,1fr);gap:clamp(14px,3vw,40px);
+  padding:clamp(24px,3.4vw,36px) 0;border-top:1px solid var(--line);align-items:start;
+}
+.step:last-of-type{border-bottom:1px solid var(--line)}
+.step-n{font-family:var(--display);font-size:26px;color:#4C5561;line-height:1.2}
+.step h3{margin:0;font-size:19px;font-weight:500}
+.step p{margin:9px 0 0;color:var(--muted);font-size:15.5px;line-height:1.66;max-width:58ch}
+.step p mark{background:none;color:var(--ember-soft);font-weight:500}
+.step p em{font-style:normal;color:var(--jade-soft)}
+.step-n{grid-column:1}
+.step h3,.step p{grid-column:2}      /* keep copy out of the number column */
+@media (min-width:760px){
+  .step{grid-template-columns:64px minmax(0,24ch) minmax(0,1fr)}
+  .step h3{grid-column:2;padding-top:2px}
+  .step p{grid-column:3;margin-top:0}
+}
+@media (max-width:420px){.step{grid-template-columns:36px minmax(0,1fr)}.step-n{font-size:22px}}
+
+.sources{
+  margin-top:28px;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-size:13px;color:#6E7683;
+}
+.sources span{padding:5px 11px;border:1px solid var(--line);border-radius:2px;color:var(--muted)}
+
+/* ------------------------------ demo ------------------------------ */
+.demo-frame{
+  margin-top:clamp(32px,4.5vw,52px);position:relative;
+  aspect-ratio:16/9;width:100%;border:1px solid var(--line);
+  background:
+    radial-gradient(70% 90% at 50% 100%,rgba(255,107,69,.07),transparent 70%),
+    linear-gradient(180deg,#14181E,#0E1116);
+  display:grid;place-items:center;overflow:hidden;
+}
+.demo-inner{text-align:center;padding:24px}
+.play{
+  width:62px;height:62px;margin:0 auto 18px;border-radius:50%;
+  border:1px solid var(--line-2);display:grid;place-items:center;color:var(--text);
+}
+.play svg{width:17px;height:17px;margin-left:3px}
+.demo-inner p{margin:0;color:var(--muted);font-size:14.5px}
+.demo-inner p small{display:block;margin-top:7px;color:#5F6874;font-size:12.5px}
+@media (max-width:520px){.play{width:50px;height:50px}.play svg{width:14px;height:14px}}
+
+/* ------------------------------ footer ------------------------------ */
+.footer{border-top:1px solid var(--line);padding:38px 0 46px}
+.footer-in{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:center;justify-content:space-between}
+.footer-in p{margin:0;font-size:13.5px;color:#5F6874}
+.footer-links{display:flex;gap:24px}
+.footer-links a{font-size:13.5px;color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line-2);padding-bottom:2px}
+.footer-links a:hover{color:var(--text);border-color:var(--text)}
+
+/* --------------- reduced motion: freeze on the first frame --------------- */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body id="top">
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 22 22" aria-hidden="true">
+        <rect x="0" y="0" width="8" height="8" rx="1"/><rect x="14" y="0" width="8" height="8" rx="1"/>
+        <rect x="0" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4" rx="1"/>
+        <rect x="18" y="18" width="4" height="4" rx="1"/>
+      </svg>
+      <span class="brand-name">Semak QR</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#demo">Demo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ------------------------------ HERO ------------------------------ -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <h1 class="serif">Know who you're paying,<br><em>before</em> you pay them.</h1>
+        <p class="subhead">
+          Malaysia already has scam-account databases. Nobody checks them at the one moment
+          it matters — the second before you hit confirm. Semak QR floats over your banking
+          app, reads the payment screen you're already looking at, and tells you in one
+          sentence whether that account has been reported.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#demo">
+            <svg width="11" height="12" viewBox="0 0 11 12" fill="currentColor" aria-hidden="true"><path d="M11 6 0 12V0z"/></svg>
+            Watch demo
+          </a>
+          <a class="btn btn-ghost" href="#how">How it works</a>
+        </div>
+        <p class="hero-note">
+          <b>Nothing is kept.</b> The screenshot, the name and the account number are
+          processed in memory and discarded with the response.
+        </p>
+      </div>
+
+      <div class="stage">
+        <!-- Looping product animation: QR scan → bank confirmation → bubble → verdict.
+             Alternates between a flagged and a clear result on each pass.
+             Driven by the script at the bottom of this file; it freezes on the
+             first frame when prefers-reduced-motion is set. -->
+        <div>
+          <div class="phone">
+            <div class="screen" id="screen">
+              <div class="notch"></div>
+
+              <div class="flipper">
+                <!-- face 1: scanning a DuitNow QR -->
+                <div class="face face-scan">
+                  <p class="scan-label">DuitNow QR</p>
+                  <div class="scan-box">
+                    <div class="qr" id="qr" aria-hidden="true"></div>
+                    <span class="corner tl"></span><span class="corner tr"></span>
+                    <span class="corner bl"></span><span class="corner br"></span>
+                    <span class="scanline"></span>
+                  </div>
+                  <p class="scan-sub">Align the code within the frame</p>
+                </div>
+
+                <!-- face 2: the bank's own confirmation screen -->
+                <div class="face face-back face-bank">
+                  <div class="bank-top"><b>Bank app</b><span>DuitNow QR</span></div>
+                  <div class="bank-body">
+                    <p class="bank-head">You're paying</p>
+                    <div class="bank-amt" id="mAmount">RM 350.00</div>
+                    <div class="bank-rows">
+                      <div class="brow"><span>To</span><b id="mName">GLOBAL WIN MARKETING ENT</b></div>
+                      <div class="brow"><span>Account</span><b id="mAcct">7291 8845 53</b></div>
+                      <div class="brow"><span>Reference</span><b id="mRef">Barang online</b></div>
+                    </div>
+                    <div class="bank-pay">Confirm payment</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- the floating bubble, sitting on top of whatever app is open -->
+              <div class="bubble" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3 4 6v6c0 4.3 3.2 7.7 8 9 4.8-1.3 8-4.7 8-9V6l-8-3z"/>
+                  <path d="m9 12 2.2 2.2L15.5 10"/>
+                </svg>
+              </div>
+
+              <!-- checking → verdict card -->
+              <div class="sheet">
+                <span class="sheet-strip"></span>
+                <div class="sheet-tag"><span class="dot"></span><span id="sheetTag">Checking this account…</span></div>
+
+                <ul class="checks" id="checks">
+                  <li><span class="tick"><svg viewBox="0 0 12 12" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 6.3 3 3 6-6.6"/></svg></span>Scam-report database</li>
+                  <li><span class="tick"><svg viewBox="0 0 12 12" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 6.3 3 3 6-6.6"/></svg></span>Bank Negara alert list</li>
+                  <li><span class="tick"><svg viewBox="0 0 12 12" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 6.3 3 3 6-6.6"/></svg></span>Live web search</li>
+                </ul>
+
+                <div class="verdict">
+                  <div class="v-head">
+                    <span class="v-badge" id="vBadge"></span>
+                    <span class="v-title" id="vTitle">Don't pay this one</span>
+                  </div>
+                  <p class="v-body" id="vBody">This account was flagged 3 times in scam-report checks.</p>
+                  <p class="v-evidence" id="vEvidence">Scam database: 3 reports · most recent 11 days ago</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="stage-caption">The bubble sits on top of your banking app. Your bank's own screen is never touched.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------- HOW IT WORKS --------------------------- -->
+  <section class="section" id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Three steps, and two of them you already do.</h2>
+        <p>Semak QR doesn't replace your banking app or ask you to retype an account number into some website. It works on the screen you're already staring at.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">01</div>
+          <h3>Scan as usual</h3>
+          <p>Open your banking app, scan the DuitNow QR, and let it show the confirmation screen with the recipient's name and account number. Screenshot it. Nothing about how you pay changes.</p>
+        </div>
+        <div class="step">
+          <div class="step-n">02</div>
+          <h3>Tap the bubble</h3>
+          <p>The floating bubble picks up the new screenshot and reads the name, account number and amount off it. That account then goes to scam-report checks, the Bank Negara alert list and a live web search — all at once, in a few seconds.</p>
+        </div>
+        <div class="step">
+          <div class="step-n">03</div>
+          <h3>Get a plain answer</h3>
+          <p>Not a risk score. One sentence you can read in two seconds — <mark>“this account was flagged 3 times”</mark> or <em>“no scam reports found”</em> — with the evidence sitting underneath it if you want to look closer.</p>
+        </div>
+      </div>
+
+      <div class="sources">
+        Checked against
+        <span>PenipuMY scam reports</span>
+        <span>BNM Financial Consumer Alert List</span>
+        <span>Live web search</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------ DEMO ------------------------------ -->
+  <section class="section" id="demo">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>See it catch one.</h2>
+        <p>A full run on a real Android phone: scan, screenshot, bubble, verdict — start to finish, no cuts.</p>
+      </div>
+
+      <!-- ==================================================================
+           DEMO VIDEO GOES HERE.
+           Replace this whole <div class="demo-frame"> … </div> block with the
+           real footage once it's recorded. Either option keeps the 16:9 box
+           and the border:
+
+           1) Self-hosted file (drop demo.mp4 next to index.html):
+              <video class="demo-frame" controls playsinline poster="poster.jpg">
+                <source src="demo.mp4" type="video/mp4">
+              </video>
+
+           2) YouTube embed:
+              <div class="demo-frame">
+                <iframe src="https://www.youtube.com/embed/VIDEO_ID"
+                        title="Semak QR demo" allowfullscreen
+                        style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
+              </div>
+      =================================================================== -->
+      <div class="demo-frame">
+        <div class="demo-inner">
+          <div class="play"><svg viewBox="0 0 12 14" fill="currentColor" aria-hidden="true"><path d="M12 7 0 14V0z"/></svg></div>
+          <p>Demo video<small>Footage drops in here before judging.</small></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-in">
+    <p>© 2026 Semak QR. Built in Malaysia, for the two seconds before you tap confirm.</p>
+    <nav class="footer-links">
+      <!-- TODO: swap in the real APK release URL and repo URL -->
+      <a href="#" download>Download APK</a>
+      <a href="#" rel="noopener">GitHub repo</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---- a fake but deterministic QR pattern: no library, no network ---- */
+  (function buildQR() {
+    var host = document.getElementById("qr");
+    if (!host) return;
+    var N = 21, seed = 20260913;
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function finder(r, c) {                        // one of the three corner squares
+      if (r === 0 || r === 6 || c === 0 || c === 6) return true;
+      return r >= 2 && r <= 4 && c >= 2 && c <= 4;
+    }
+    var frag = document.createDocumentFragment();
+    for (var r = 0; r < N; r++) {
+      for (var c = 0; c < N; c++) {
+        var on;
+        if (r < 7 && c < 7) on = finder(r, c);
+        else if (r < 7 && c > N - 8) on = finder(r, c - (N - 7));
+        else if (r > N - 8 && c < 7) on = finder(r - (N - 7), c);
+        else if (r === 6 || c === 6) on = (r + c) % 2 === 0;
+        else on = rnd() > 0.52;
+        var cell = document.createElement("i");
+        if (on) cell.className = "on";
+        frag.appendChild(cell);
+      }
+    }
+    host.appendChild(frag);
+  })();
+
+  /* -------------------------- the looping demo -------------------------- */
+  var screenEl = document.getElementById("screen");
+  if (!screenEl) return;
+
+  var checks    = Array.prototype.slice.call(document.querySelectorAll("#checks li"));
+  var sheetTag  = document.getElementById("sheetTag");
+  var mName     = document.getElementById("mName");
+  var mAcct     = document.getElementById("mAcct");
+  var mAmount   = document.getElementById("mAmount");
+  var mRef      = document.getElementById("mRef");
+  var vTitle    = document.getElementById("vTitle");
+  var vBody     = document.getElementById("vBody");
+  var vEvidence = document.getElementById("vEvidence");
+  var vBadge    = document.getElementById("vBadge");
+
+  var ICON_ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 9v4.5"/><path d="M12 17h.01"/></svg>';
+  var ICON_OK    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.3 3.2 7.7 8 9 4.8-1.3 8-4.7 8-9V6l-8-3z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>';
+
+  /* Both cases are fictional demo data — no real person or business. */
+  var CASES = [
+    { kind: "flagged",
+      name: "GLOBAL WIN MARKETING ENT", acct: "7291 8845 53", amount: "RM 350.00", ref: "Barang online",
+      tag: "Flagged account",
+      title: "Don't pay this one",
+      body: "This account was flagged 3 times in scam-report checks.",
+      evidence: "Scam database: 3 reports · most recent 11 days ago" },
+    { kind: "safe",
+      name: "KEDAI RUNCIT SRI AMAN", acct: "5540 2216 08", amount: "RM 28.90", ref: "Groceries",
+      tag: "Checked · clear",
+      title: "Nothing reported",
+      body: "No scam reports found for this account or recipient.",
+      evidence: "Scam database: 0 reports · not on the BNM alert list" }
+  ];
+
+  var timers = [];
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; }
+  function setState(cls) { screenEl.className = "screen" + (cls ? " " + cls : ""); }
+
+  function paint(c) {
+    mName.textContent = c.name;
+    mAcct.textContent = c.acct;
+    mAmount.textContent = c.amount;
+    mRef.textContent = c.ref;
+    vTitle.textContent = c.title;
+    vBody.textContent = c.body;
+    vEvidence.textContent = c.evidence;
+    vBadge.innerHTML = c.kind === "flagged" ? ICON_ALERT : ICON_OK;
+  }
+
+  var i = 0;
+  function run() {
+    clearAll();
+    var c = CASES[i % CASES.length];
+    paint(c);
+    checks.forEach(function (li) { li.classList.remove("done"); });
+    sheetTag.textContent = "Checking this account…";
+
+    setState("is-scanning");                                                // 1. scanning
+    at(1900, function () { setState("is-scanning is-confirm"); });          // 2. bank confirm screen
+    at(2750, function () { setState("is-confirm is-bubble"); });            // 3. bubble arrives
+    at(3900, function () { setState("is-confirm is-bubble is-tapped"); });  // 4. tap
+    at(4150, function () { setState("is-confirm is-sheet"); });             // 5. checks run
+    checks.forEach(function (li, n) {
+      at(4550 + n * 430, function () { li.classList.add("done"); });
+    });
+    at(6050, function () {                                                  // 6. verdict
+      sheetTag.textContent = c.tag;
+      setState("is-confirm is-verdict v-" + c.kind);
+    });
+    at(9700, function () {                                                  // 7. reset, swap case
+      setState("");
+      i++;
+      at(750, run);
+    });
+  }
+
+  /* Freeze on the first frame instead of looping, if the user asked for that. */
+  var reduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  function start() {
+    clearAll();
+    if (reduce && reduce.matches) { paint(CASES[0]); setState(""); return; }
+    run();
+  }
+  if (reduce && reduce.addEventListener) reduce.addEventListener("change", start);
+  start();
+
+  /* Don't run (or drift out of sync) while the tab is hidden. */
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) clearAll(); else start();
+  });
+})();
+</script>
+</body>
+</html>

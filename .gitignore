@@ -23,3 +23,6 @@ Thumbs.db
 # Internal build specs, kept local
 Backend/Backend.txt
 Backend/Context.txt
+/Context.txt
+landing_page/Context.txt
+landing_page/landingpage.txt
