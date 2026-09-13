@@ -28,7 +28,8 @@ lookup responses, and verdicts are handled in memory only and never written to d
    `{risk_level, reason, evidence}`, bound strictly to the lookup results. If it fails or
    returns malformed JSON, a deterministic non-LLM fallback verdict is used instead.
 
-Worst-case latency is bounded at roughly 8s + 5s + 6s.
+Worst-case provider latency is bounded at roughly 3.5s + 2s + 3s, leaving
+headroom for transfer overhead inside the Android client's 10-second timeout.
 
 ## Setup
 

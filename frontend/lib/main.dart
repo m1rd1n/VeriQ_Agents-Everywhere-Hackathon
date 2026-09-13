@@ -126,7 +126,7 @@ class _OverlayViewState extends State<OverlayView>
   }
 
   Future<void> _expand([String? message]) async {
-    await FlutterOverlayWindow.resizeOverlay(320, 370);
+    await FlutterOverlayWindow.resizeOverlay(320, 370, true);
     if (mounted)
       setState(() {
         _expanded = true;
@@ -173,7 +173,7 @@ class _OverlayViewState extends State<OverlayView>
       _step = 'Reading payment details...';
     });
     try {
-      if (backendUrl.isEmpty)
+      if (backendBaseUrl.isEmpty)
         throw const _CheckException('Backend URL has not been configured.');
       final result = await _postWithRetry(image);
       if (mounted)
@@ -204,7 +204,7 @@ class _OverlayViewState extends State<OverlayView>
           setState(() => _step = 'Trying once more...');
         final request = http.MultipartRequest(
           'POST',
-          Uri.parse('$backendUrl/check-transaction'),
+          Uri.parse('$backendBaseUrl/check-transaction'),
         );
         request.files.add(
           await http.MultipartFile.fromPath('screenshot', image.path),
@@ -226,7 +226,7 @@ class _OverlayViewState extends State<OverlayView>
   }
 
   Future<void> _collapse() async {
-    await FlutterOverlayWindow.resizeOverlay(72, 72);
+    await FlutterOverlayWindow.resizeOverlay(72, 72, true);
     if (mounted)
       setState(() {
         _expanded = false;

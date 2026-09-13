@@ -9,7 +9,9 @@ flutter pub get
 flutter run --dart-define=BACKEND_URL=https://your-backend.example
 ```
 
-The backend URL must not end with `/`; the app adds `/check-transaction`.
+The backend URL must not end with `/`; the app adds `/check-transaction`. For a
+physical phone, use the backend's deployed HTTPS URL or an HTTPS tunnel URL;
+`localhost` and `127.0.0.1` point to the phone itself and will not work.
 
 ## UI-only demo (no backend required)
 

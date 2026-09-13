@@ -28,11 +28,12 @@ logger = logging.getLogger("semakqr")
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Latency budget: the floating bubble must show a card fast, so the worst case is
-# bounded at roughly vision + lookups + verdict = 8s + 5s + 6s.
-VISION_TIMEOUT = 8.0
-LOOKUP_TIMEOUT = 5.0
-VERDICT_TIMEOUT = 6.0
+# The Android client has a 10-second request budget. These sequential stages
+# must fit inside it, including transfer overhead: 3.5s vision + 2s parallel
+# lookups + 3s verdict = 8.5s maximum provider wait time.
+VISION_TIMEOUT = 3.5
+LOOKUP_TIMEOUT = 2.0
+VERDICT_TIMEOUT = 3.0
 
 UNKNOWN_RESPONSE = {
     "risk_level": "unknown",
