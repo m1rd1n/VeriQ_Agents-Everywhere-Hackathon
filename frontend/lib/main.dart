@@ -17,8 +17,8 @@ void main() => runApp(const SemakQrApp());
 /// Entry point launched by flutter_overlay_window in a separate Flutter engine.
 @pragma('vm:entry-point')
 void overlayMain() => runApp(
-  const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayView()),
-);
+      const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayView()),
+    );
 
 class SemakQrApp extends StatefulWidget {
   const SemakQrApp({super.key});
@@ -26,66 +26,205 @@ class SemakQrApp extends StatefulWidget {
   State<SemakQrApp> createState() => _SemakQrAppState();
 }
 
-class _SemakQrAppState extends State<SemakQrApp> {
+class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
   StreamSubscription<dynamic>? _screenshots;
-  String _status = 'Preparing Semak QR...';
+  bool _overlayAllowed = false;
+  bool _overlayActive = false;
+  bool _checkingBackend = false;
+  String _backendStatus = backendBaseUrl.isEmpty
+      ? 'Backend URL has not been configured yet.'
+      : 'Backend has not been checked.';
 
   @override
   void initState() {
     super.initState();
-    _prepare();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshOverlayPermission();
+    _screenshots = _screenshotEvents.receiveBroadcastStream().listen((_) {
+      // The event contains no saved image path. The user chooses a screenshot
+      // only when Android blocks automatic access to it.
+      FlutterOverlayWindow.shareData('screenshot_detected');
+    });
   }
 
-  Future<void> _prepare() async {
-    // Permission is required only to observe screenshot additions; images are
-    // never saved or copied by this app.
-    await Permission.photos.request();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshOverlayPermission();
+  }
+
+  Future<void> _refreshOverlayPermission() async {
     final allowed = await FlutterOverlayWindow.isPermissionGranted();
-    if (!allowed) await FlutterOverlayWindow.requestPermission();
-    final granted = await FlutterOverlayWindow.isPermissionGranted();
-    if (!mounted) return;
-    if (!granted) {
-      setState(
-        () => _status =
-            'Allow "Display over other apps" in Settings, then reopen Semak QR.',
-      );
+    if (mounted) setState(() => _overlayAllowed = allowed);
+  }
+
+  Future<void> _enableOverlay() async {
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      await FlutterOverlayWindow.requestPermission();
+      await _refreshOverlayPermission();
       return;
     }
+    // Photos permission is only for the manual screenshot fallback. Semak QR
+    // does not store a selected image or extracted payment data.
+    await Permission.photos.request();
     await FlutterOverlayWindow.showOverlay(
       enableDrag: true,
-      overlayTitle: 'Semak QR',
-      overlayContent: 'Tap to check a payment screenshot',
+      overlayTitle: 'Semak QR is ready',
+      overlayContent: 'Tap the bubble to check a payment.',
+      alignment: OverlayAlignment.centerRight,
       flag: OverlayFlag.defaultFlag,
-      visibility: NotificationVisibility.visibilityPublic,
+      visibility: NotificationVisibility.visibilityPrivate,
       positionGravity: PositionGravity.auto,
       height: 72,
       width: 72,
     );
-    _screenshots = _screenshotEvents.receiveBroadcastStream().listen((_) {
-      // Android gives us notification of the new item only. No path is kept;
-      // the user can select the image manually if the OS blocks access.
-      FlutterOverlayWindow.shareData('screenshot_detected');
-    });
-    setState(
-      () => _status =
-          'Overlay is active. Take a screenshot, or use Upload in the bubble.',
-    );
+    if (mounted) setState(() => _overlayActive = true);
+  }
+
+  Future<void> _checkBackend() async {
+    if (backendBaseUrl.isEmpty) return;
+    setState(() => _checkingBackend = true);
+    try {
+      final response = await http
+          .get(Uri.parse('$backendBaseUrl/health'))
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      setState(() => _backendStatus = response.statusCode == 200
+          ? 'Backend connected and ready.'
+          : 'Backend responded with ${response.statusCode}.');
+    } catch (_) {
+      if (mounted)
+        setState(() => _backendStatus = 'Could not reach the backend.');
+    } finally {
+      if (mounted) setState(() => _checkingBackend = false);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _screenshots?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: Scaffold(
-      appBar: AppBar(title: const Text('Semak QR')),
-      body: Padding(padding: const EdgeInsets.all(24), child: Text(_status)),
-    ),
-  );
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF006E5B)),
+          useMaterial3: true,
+        ),
+        home: Scaffold(
+          backgroundColor: const Color(0xFFF4F8F6),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: const BoxDecoration(
+                            color: Color(0xFF006E5B), shape: BoxShape.circle),
+                        child: const Icon(Icons.qr_code_scanner_rounded,
+                            color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Semak QR',
+                                style: TextStyle(
+                                    fontSize: 22, fontWeight: FontWeight.w800)),
+                            Text('A final check before you pay',
+                                style: TextStyle(color: Colors.black54)),
+                          ]),
+                    ]),
+                    const Spacer(),
+                    const Text('Stay one step ahead of scams.',
+                        style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            height: 1.08)),
+                    const SizedBox(height: 12),
+                    const Text(
+                        'Enable the floating safety check, then take a payment-confirmation screenshot before transferring money.',
+                        style: TextStyle(
+                            fontSize: 16, height: 1.45, color: Colors.black87)),
+                    const SizedBox(height: 24),
+                    _statusCard(
+                        Icons.layers_rounded,
+                        'Floating overlay',
+                        _overlayActive
+                            ? 'Active - the bubble is ready above other apps.'
+                            : _overlayAllowed
+                                ? 'Permission granted - enable the bubble.'
+                                : 'Permission required to display the bubble.'),
+                    const SizedBox(height: 12),
+                    _statusCard(Icons.cloud_outlined, 'Safety-check backend',
+                        _backendStatus),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _enableOverlay,
+                          icon: Icon(_overlayAllowed
+                              ? Icons.bubble_chart_rounded
+                              : Icons.settings_outlined),
+                          label: Text(_overlayAllowed
+                              ? 'Enable Semak QR overlay'
+                              : 'Allow overlay permission'),
+                          style: FilledButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 17)),
+                        )),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _checkingBackend || backendBaseUrl.isEmpty
+                              ? null
+                              : _checkBackend,
+                          icon: _checkingBackend
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.wifi_tethering_rounded),
+                          label: const Text('Check backend connection'),
+                        )),
+                    const SizedBox(height: 18),
+                    const Text(
+                        'Your screenshots and payment details are processed for the check only. Semak QR does not keep them.',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.black54, height: 1.4)),
+                  ]),
+            ),
+          ),
+        ),
+      );
+
+  Widget _statusCard(IconData icon, String title, String detail) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: const Color(0xFF006E5B)),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(detail,
+                    style: const TextStyle(fontSize: 13, color: Colors.black54))
+              ])),
+        ]),
+      );
 }
 
 class OverlayView extends StatefulWidget {
@@ -156,7 +295,8 @@ class _OverlayViewState extends State<OverlayView>
       _loading = false;
       _result = const CheckResult(
         riskLevel: 'high',
-        reason: 'This recipient is flagged in scam reports. Do not transfer money.',
+        reason:
+            'This recipient is flagged in scam reports. Do not transfer money.',
         evidence: [
           'Matched a reported scam-account record',
           'Web reports indicate possible mule-account activity',
@@ -210,8 +350,8 @@ class _OverlayViewState extends State<OverlayView>
           await http.MultipartFile.fromPath('screenshot', image.path),
         );
         final streamed = await request.send().timeout(
-          const Duration(seconds: 10),
-        );
+              const Duration(seconds: 10),
+            );
         final response = await http.Response.fromStream(
           streamed,
         ).timeout(const Duration(seconds: 10));
@@ -236,101 +376,102 @@ class _OverlayViewState extends State<OverlayView>
 
   @override
   Widget build(BuildContext context) => Material(
-    type: MaterialType.transparency,
-    child: Stack(
-      children: [
-        if (_expanded)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _collapse,
-              behavior: HitTestBehavior.opaque,
+        type: MaterialType.transparency,
+        child: Stack(
+          children: [
+            if (_expanded)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _collapse,
+                  behavior: HitTestBehavior.opaque,
+                ),
+              ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: _expanded ? null : _expand,
+                child: _expanded ? _card() : _bubble(),
+              ),
             ),
-          ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onTap: _expanded ? null : _expand,
-            child: _expanded ? _card() : _bubble(),
-          ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 
   Widget _bubble() => Container(
-    margin: const EdgeInsets.only(right: 12),
-    width: 64,
-    height: 64,
-    decoration: const BoxDecoration(
-      color: Color(0xFF006E5B),
-      shape: BoxShape.circle,
-      boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
-    ),
-    child: const Icon(
-      Icons.qr_code_scanner_rounded,
-      color: Colors.white,
-      size: 30,
-    ),
-  );
+        margin: const EdgeInsets.only(right: 12),
+        width: 64,
+        height: 64,
+        decoration: const BoxDecoration(
+          color: Color(0xFF006E5B),
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
+        ),
+        child: const Icon(
+          Icons.qr_code_scanner_rounded,
+          color: Colors.white,
+          size: 30,
+        ),
+      );
 
   Widget _card() => Container(
-    width: 296,
-    margin: const EdgeInsets.only(right: 12),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 14)],
-    ),
-    child: _loading
-        ? _loadingCard()
-        : _result == null
-        ? _startCard()
-        : _resultCard(_result!),
-  );
+        width: 296,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 14)],
+        ),
+        child: _loading
+            ? _loadingCard()
+            : _result == null
+                ? _startCard()
+                : _resultCard(_result!),
+      );
 
   Widget _startCard() => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Semak QR',
-        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'Upload a payment-confirmation screenshot to check the recipient before you pay.',
-      ),
-      const SizedBox(height: 14),
-      if (demoMode) ...[
-        FilledButton.icon(
-          onPressed: _previewFlaggedResult,
-          icon: const Icon(Icons.visibility),
-          label: const Text('Preview flagged result'),
-        ),
-        const SizedBox(height: 8),
-      ],
-      FilledButton.icon(
-        onPressed: _chooseAndCheck,
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Upload screenshot'),
-      ),
-    ],
-  );
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Semak QR',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Upload a payment-confirmation screenshot to check the recipient before you pay.',
+          ),
+          const SizedBox(height: 14),
+          if (demoMode) ...[
+            FilledButton.icon(
+              onPressed: _previewFlaggedResult,
+              icon: const Icon(Icons.visibility),
+              label: const Text('Preview flagged result'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          FilledButton.icon(
+            onPressed: _chooseAndCheck,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Upload screenshot'),
+          ),
+        ],
+      );
 
   Widget _loadingCard() => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      FadeTransition(opacity: _pulse, child: const CircularProgressIndicator()),
-      const SizedBox(height: 14),
-      Text(_step, textAlign: TextAlign.center),
-      const SizedBox(height: 4),
-      const Text(
-        'Checking database and web signals...',
-        style: TextStyle(fontSize: 12, color: Colors.black54),
-      ),
-    ],
-  );
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FadeTransition(
+              opacity: _pulse, child: const CircularProgressIndicator()),
+          const SizedBox(height: 14),
+          Text(_step, textAlign: TextAlign.center),
+          const SizedBox(height: 4),
+          const Text(
+            'Checking database and web signals...',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
+      );
 
   Widget _resultCard(CheckResult result) {
     final color = switch (result.riskLevel) {
@@ -413,12 +554,10 @@ class CheckResult {
     final json = jsonDecode(body) as Map<String, dynamic>;
     return CheckResult(
       riskLevel: json['risk_level'] as String? ?? 'unknown',
-      reason:
-          json['reason'] as String? ??
+      reason: json['reason'] as String? ??
           "Couldn't check right now — proceed carefully",
-      evidence: (json['evidence'] as List? ?? [])
-          .map((e) => e.toString())
-          .toList(),
+      evidence:
+          (json['evidence'] as List? ?? []).map((e) => e.toString()).toList(),
     );
   }
 }
