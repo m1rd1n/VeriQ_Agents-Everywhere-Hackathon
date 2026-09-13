@@ -1,0 +1,15 @@
+# Flutter / Dart generated artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+android/.gradle/
+**/android/local.properties
+*.iml
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
