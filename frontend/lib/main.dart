@@ -28,9 +28,13 @@ class SemakQrApp extends StatefulWidget {
 
 class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
   StreamSubscription<dynamic>? _screenshots;
+  StreamSubscription<dynamic>? _overlayMessages;
+  final _picker = ImagePicker();
   bool _overlayAllowed = false;
   bool _overlayActive = false;
   bool _checkingBackend = false;
+  bool _uploading = false;
+  CheckResult? _lastResult;
   String _backendStatus = backendBaseUrl.isEmpty
       ? 'Backend URL has not been configured yet.'
       : 'Backend has not been checked.';
@@ -44,6 +48,9 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
       // The event contains no saved image path. The user chooses a screenshot
       // only when Android blocks automatic access to it.
       FlutterOverlayWindow.shareData('screenshot_detected');
+    });
+    _overlayMessages = FlutterOverlayWindow.overlayListener.listen((event) {
+      if (event == 'request_app_upload') _uploadScreenshot();
     });
   }
 
@@ -99,10 +106,46 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
     }
   }
 
+  /// Runs from the foreground activity. The overlay asks this activity to own
+  /// Android's picker, because an overlay service cannot launch it reliably.
+  Future<void> _uploadScreenshot() async {
+    if (_uploading) return;
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      requestFullMetadata: false,
+    );
+    if (image == null) return;
+    setState(() => _uploading = true);
+    await FlutterOverlayWindow.shareData('upload_started');
+    try {
+      final result = await TransactionChecker.check(image);
+      if (!mounted) return;
+      setState(() => _lastResult = result);
+      await FlutterOverlayWindow.shareData(jsonEncode({
+        'type': 'check_result',
+        ...result.toJson(),
+      }));
+    } catch (_) {
+      const result = CheckResult(
+        riskLevel: 'unknown',
+        reason: "Couldn't check right now — proceed carefully",
+        evidence: [],
+      );
+      if (mounted) setState(() => _lastResult = result);
+      await FlutterOverlayWindow.shareData(jsonEncode({
+        'type': 'check_result',
+        ...result.toJson(),
+      }));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _screenshots?.cancel();
+    _overlayMessages?.cancel();
     super.dispose();
   }
 
@@ -116,91 +159,122 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
         home: Scaffold(
           backgroundColor: const Color(0xFFF4F8F6),
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                            color: Color(0xFF006E5B), shape: BoxShape.circle),
-                        child: const Icon(Icons.qr_code_scanner_rounded,
-                            color: Colors.white),
-                      ),
-                      const SizedBox(width: 12),
-                      const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Semak QR',
-                                style: TextStyle(
-                                    fontSize: 22, fontWeight: FontWeight.w800)),
-                            Text('A final check before you pay',
-                                style: TextStyle(color: Colors.black54)),
-                          ]),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: const BoxDecoration(
+                              color: Color(0xFF006E5B), shape: BoxShape.circle),
+                          child: const Icon(Icons.qr_code_scanner_rounded,
+                              color: Colors.white),
+                        ),
+                        const SizedBox(width: 12),
+                        const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Semak QR',
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800)),
+                              Text('A final check before you pay',
+                                  style: TextStyle(color: Colors.black54)),
+                            ]),
+                      ]),
+                      const SizedBox(height: 64),
+                      const Text('Stay one step ahead of scams.',
+                          style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              height: 1.08)),
+                      const SizedBox(height: 12),
+                      const Text(
+                          'Enable the floating safety check, then take a payment-confirmation screenshot before transferring money.',
+                          style: TextStyle(
+                              fontSize: 16,
+                              height: 1.45,
+                              color: Colors.black87)),
+                      const SizedBox(height: 24),
+                      _statusCard(
+                          Icons.layers_rounded,
+                          'Floating overlay',
+                          _overlayActive
+                              ? 'Active - the bubble is ready above other apps.'
+                              : _overlayAllowed
+                                  ? 'Permission granted - enable the bubble.'
+                                  : 'Permission required to display the bubble.'),
+                      const SizedBox(height: 12),
+                      _statusCard(Icons.cloud_outlined, 'Safety-check backend',
+                          _backendStatus),
+                      if (_lastResult != null) ...[
+                        const SizedBox(height: 12),
+                        _statusCard(
+                            Icons.verified_user_outlined,
+                            'Latest check',
+                            '${_lastResult!.riskLevel.toUpperCase()}: ${_lastResult!.reason}'),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _enableOverlay,
+                            icon: Icon(_overlayAllowed
+                                ? Icons.bubble_chart_rounded
+                                : Icons.settings_outlined),
+                            label: Text(_overlayAllowed
+                                ? 'Enable Semak QR overlay'
+                                : 'Allow overlay permission'),
+                            style: FilledButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 17)),
+                          )),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _uploading ? null : _uploadScreenshot,
+                            icon: _uploading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.upload_file_outlined),
+                            label: Text(_uploading
+                                ? 'Checking screenshot...'
+                                : 'Upload screenshot in app'),
+                          )),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                _checkingBackend || backendBaseUrl.isEmpty
+                                    ? null
+                                    : _checkBackend,
+                            icon: _checkingBackend
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.wifi_tethering_rounded),
+                            label: const Text('Check backend connection'),
+                          )),
+                      const SizedBox(height: 18),
+                      const Text(
+                          'Your screenshots and payment details are processed for the check only. Semak QR does not keep them.',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                              height: 1.4)),
                     ]),
-                    const Spacer(),
-                    const Text('Stay one step ahead of scams.',
-                        style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            height: 1.08)),
-                    const SizedBox(height: 12),
-                    const Text(
-                        'Enable the floating safety check, then take a payment-confirmation screenshot before transferring money.',
-                        style: TextStyle(
-                            fontSize: 16, height: 1.45, color: Colors.black87)),
-                    const SizedBox(height: 24),
-                    _statusCard(
-                        Icons.layers_rounded,
-                        'Floating overlay',
-                        _overlayActive
-                            ? 'Active - the bubble is ready above other apps.'
-                            : _overlayAllowed
-                                ? 'Permission granted - enable the bubble.'
-                                : 'Permission required to display the bubble.'),
-                    const SizedBox(height: 12),
-                    _statusCard(Icons.cloud_outlined, 'Safety-check backend',
-                        _backendStatus),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _enableOverlay,
-                          icon: Icon(_overlayAllowed
-                              ? Icons.bubble_chart_rounded
-                              : Icons.settings_outlined),
-                          label: Text(_overlayAllowed
-                              ? 'Enable Semak QR overlay'
-                              : 'Allow overlay permission'),
-                          style: FilledButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 17)),
-                        )),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _checkingBackend || backendBaseUrl.isEmpty
-                              ? null
-                              : _checkBackend,
-                          icon: _checkingBackend
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.wifi_tethering_rounded),
-                          label: const Text('Check backend connection'),
-                        )),
-                    const SizedBox(height: 18),
-                    const Text(
-                        'Your screenshots and payment details are processed for the check only. Semak QR does not keep them.',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.black54, height: 1.4)),
-                  ]),
+              ),
             ),
           ),
         ),
@@ -235,7 +309,6 @@ class OverlayView extends StatefulWidget {
 
 class _OverlayViewState extends State<OverlayView>
     with SingleTickerProviderStateMixin {
-  final _picker = ImagePicker();
   StreamSubscription? _overlayEvents;
   late final AnimationController _pulse;
   bool _expanded = false;
@@ -252,7 +325,29 @@ class _OverlayViewState extends State<OverlayView>
     )..repeat(reverse: true);
     _overlayEvents = FlutterOverlayWindow.overlayListener.listen((event) {
       if (event == 'screenshot_detected') {
-        _expand('Screenshot detected - choose it to check');
+        _expand('Screenshot detected - upload it to check');
+      } else if (event == 'upload_started') {
+        _expand();
+        if (mounted) {
+          setState(() {
+            _loading = true;
+            _result = null;
+            _step = 'Reading payment details...';
+          });
+        }
+      } else if (event is String) {
+        try {
+          final data = jsonDecode(event) as Map<String, dynamic>;
+          if (data['type'] == 'check_result') {
+            _expand();
+            if (mounted) {
+              setState(() {
+                _loading = false;
+                _result = CheckResult.fromMap(data);
+              });
+            }
+          }
+        } catch (_) {}
       }
     });
   }
@@ -274,12 +369,9 @@ class _OverlayViewState extends State<OverlayView>
   }
 
   Future<void> _chooseAndCheck() async {
-    final image = await _picker.pickImage(
-      source: ImageSource.gallery,
-      requestFullMetadata: false,
-    );
-    if (image == null) return;
-    await _check(image);
+    // A system picker must be launched by the app's foreground Activity.
+    // The main Semak QR app receives this message and opens that picker.
+    await FlutterOverlayWindow.shareData('request_app_upload');
   }
 
   Future<void> _previewFlaggedResult() async {
@@ -303,66 +395,6 @@ class _OverlayViewState extends State<OverlayView>
         ],
       );
     });
-  }
-
-  Future<void> _check(XFile image) async {
-    await _expand();
-    setState(() {
-      _loading = true;
-      _result = null;
-      _step = 'Reading payment details...';
-    });
-    try {
-      if (backendBaseUrl.isEmpty)
-        throw const _CheckException('Backend URL has not been configured.');
-      final result = await _postWithRetry(image);
-      if (mounted)
-        setState(() {
-          _result = result;
-          _loading = false;
-        });
-    } catch (_) {
-      if (mounted)
-        setState(() {
-          _loading = false;
-          _result = const CheckResult(
-            riskLevel: 'unknown',
-            reason: "Couldn't check right now — proceed carefully",
-            evidence: [],
-          );
-        });
-    }
-    // The XFile is intentionally not retained. No screenshot or extracted data
-    // is cached or written by Semak QR after this request completes.
-  }
-
-  Future<CheckResult> _postWithRetry(XFile image) async {
-    Object? lastError;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        if (attempt == 1 && mounted)
-          setState(() => _step = 'Trying once more...');
-        final request = http.MultipartRequest(
-          'POST',
-          Uri.parse('$backendBaseUrl/check-transaction'),
-        );
-        request.files.add(
-          await http.MultipartFile.fromPath('screenshot', image.path),
-        );
-        final streamed = await request.send().timeout(
-              const Duration(seconds: 10),
-            );
-        final response = await http.Response.fromStream(
-          streamed,
-        ).timeout(const Duration(seconds: 10));
-        if (response.statusCode != 200)
-          throw const _CheckException('Request failed');
-        return CheckResult.fromJson(response.body);
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw _CheckException('$lastError');
   }
 
   Future<void> _collapse() async {
@@ -550,8 +582,15 @@ class CheckResult {
   });
   final String riskLevel, reason;
   final List<String> evidence;
+  Map<String, dynamic> toJson() => {
+        'risk_level': riskLevel,
+        'reason': reason,
+        'evidence': evidence,
+      };
   factory CheckResult.fromJson(String body) {
-    final json = jsonDecode(body) as Map<String, dynamic>;
+    return CheckResult.fromMap(jsonDecode(body) as Map<String, dynamic>);
+  }
+  factory CheckResult.fromMap(Map<String, dynamic> json) {
     return CheckResult(
       riskLevel: json['risk_level'] as String? ?? 'unknown',
       reason: json['reason'] as String? ??
@@ -559,6 +598,39 @@ class CheckResult {
       evidence:
           (json['evidence'] as List? ?? []).map((e) => e.toString()).toList(),
     );
+  }
+}
+
+class TransactionChecker {
+  static Future<CheckResult> check(XFile image) async {
+    if (backendBaseUrl.isEmpty) {
+      throw const _CheckException('Backend URL has not been configured.');
+    }
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$backendBaseUrl/check-transaction'),
+        );
+        request.files.add(
+          await http.MultipartFile.fromPath('screenshot', image.path),
+        );
+        final streamed = await request.send().timeout(
+          const Duration(seconds: 10),
+        );
+        final response = await http.Response.fromStream(
+          streamed,
+        ).timeout(const Duration(seconds: 10));
+        if (response.statusCode != 200) {
+          throw const _CheckException('Request failed');
+        }
+        return CheckResult.fromJson(response.body);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw _CheckException('$lastError');
   }
 }
 
