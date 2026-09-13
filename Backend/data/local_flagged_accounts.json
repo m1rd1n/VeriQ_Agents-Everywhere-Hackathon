@@ -1,0 +1,13 @@
+{
+  "_about": "Offline seed list of flagged bank accounts, checked before any network lookup.",
+  "_source_policy": "Every entry MUST carry a 'source'. Use 'demo_seed' ONLY for synthetic demo data. Real entries must name a verifiable public source (e.g. 'semakmule_top10' with the date observed). Never add a real account number without one - an invented report is a false accusation against a real account holder.",
+  "_adding_entries": "account_number may contain spaces or dashes; matching is digits-only. report_count 0 means 'listed, count unknown'.",
+  "accounts": [
+    {
+      "account_number": "158118482136",
+      "report_count": 3,
+      "source": "demo_seed",
+      "note": "Reserved synthetic account for the live demo. Not a real reported account."
+    }
+  ]
+}

@@ -8,8 +8,18 @@ android/.gradle/
 **/android/local.properties
 *.iml
 
+# Python / backend
+.env
+.venv/
+__pycache__/
+*.py[cod]
+
 # Editor and OS files
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Internal build specs, kept local
+Backend/Backend.txt
+Backend/Context.txt
