@@ -34,6 +34,7 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
   bool _overlayActive = false;
   bool _checkingBackend = false;
   bool _uploading = false;
+  bool _pickerOpening = false;
   CheckResult? _lastResult;
   String _backendStatus = backendBaseUrl.isEmpty
       ? 'Backend URL has not been configured yet.'
@@ -50,7 +51,7 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
       FlutterOverlayWindow.shareData('screenshot_detected');
     });
     _overlayMessages = FlutterOverlayWindow.overlayListener.listen((event) {
-      if (event == 'request_app_upload') _uploadScreenshot();
+      if (event == 'request_app_upload') _uploadScreenshot(showInOverlay: true);
     });
   }
 
@@ -108,23 +109,36 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
 
   /// Runs from the foreground activity. The overlay asks this activity to own
   /// Android's picker, because an overlay service cannot launch it reliably.
-  Future<void> _uploadScreenshot() async {
-    if (_uploading) return;
-    final image = await _picker.pickImage(
-      source: ImageSource.gallery,
-      requestFullMetadata: false,
-    );
+  Future<void> _uploadScreenshot({bool showInOverlay = false}) async {
+    if (_uploading || _pickerOpening) return;
+    _pickerOpening = true;
+    XFile? image;
+    try {
+      image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        requestFullMetadata: false,
+      );
+    } on PlatformException {
+      // Android rejects concurrent picker launches. The guard above prevents
+      // this in normal use; a quick double tap simply leaves the current
+      // picker in control rather than crashing the app.
+      return;
+    } finally {
+      _pickerOpening = false;
+    }
     if (image == null) return;
     setState(() => _uploading = true);
-    await FlutterOverlayWindow.shareData('upload_started');
+    if (showInOverlay) await FlutterOverlayWindow.shareData('upload_started');
     try {
       final result = await TransactionChecker.check(image);
       if (!mounted) return;
       setState(() => _lastResult = result);
-      await FlutterOverlayWindow.shareData(jsonEncode({
-        'type': 'check_result',
-        ...result.toJson(),
-      }));
+      if (showInOverlay) {
+        await FlutterOverlayWindow.shareData(jsonEncode({
+          'type': 'check_result',
+          ...result.toJson(),
+        }));
+      }
     } catch (_) {
       const result = CheckResult(
         riskLevel: 'unknown',
@@ -132,10 +146,12 @@ class _SemakQrAppState extends State<SemakQrApp> with WidgetsBindingObserver {
         evidence: [],
       );
       if (mounted) setState(() => _lastResult = result);
-      await FlutterOverlayWindow.shareData(jsonEncode({
-        'type': 'check_result',
-        ...result.toJson(),
-      }));
+      if (showInOverlay) {
+        await FlutterOverlayWindow.shareData(jsonEncode({
+          'type': 'check_result',
+          ...result.toJson(),
+        }));
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
