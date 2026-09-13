@@ -143,6 +143,28 @@ class _OverlayViewState extends State<OverlayView>
     await _check(image);
   }
 
+  Future<void> _previewFlaggedResult() async {
+    await _expand();
+    setState(() {
+      _loading = true;
+      _result = null;
+      _step = 'Checking scam database...';
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _result = const CheckResult(
+        riskLevel: 'high',
+        reason: 'This recipient is flagged in scam reports. Do not transfer money.',
+        evidence: [
+          'Matched a reported scam-account record',
+          'Web reports indicate possible mule-account activity',
+        ],
+      );
+    });
+  }
+
   Future<void> _check(XFile image) async {
     await _expand();
     setState(() {
@@ -280,6 +302,14 @@ class _OverlayViewState extends State<OverlayView>
         'Upload a payment-confirmation screenshot to check the recipient before you pay.',
       ),
       const SizedBox(height: 14),
+      if (demoMode) ...[
+        FilledButton.icon(
+          onPressed: _previewFlaggedResult,
+          icon: const Icon(Icons.visibility),
+          label: const Text('Preview flagged result'),
+        ),
+        const SizedBox(height: 8),
+      ],
       FilledButton.icon(
         onPressed: _chooseAndCheck,
         icon: const Icon(Icons.upload_file),

@@ -11,6 +11,16 @@ flutter run --dart-define=BACKEND_URL=https://your-backend.example
 
 The backend URL must not end with `/`; the app adds `/check-transaction`.
 
+## UI-only demo (no backend required)
+
+Install on a physical Android phone with:
+
+```powershell
+flutter run --dart-define=DEMO_MODE=true
+```
+
+Grant the overlay permission, open any other app, then tap the green Semak QR bubble. Choose **Preview flagged result** to see the loading and high-risk-result cards without uploading an image or contacting a backend.
+
 ## Permissions
 
 On first launch Semak QR asks for two Android permissions:
